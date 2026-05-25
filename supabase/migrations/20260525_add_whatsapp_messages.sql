@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS public.whatsapp_messages (
 ALTER TABLE public.whatsapp_messages ENABLE ROW LEVEL SECURITY;
 
 -- Política: Admin y usuario propietario del pago pueden ver
+DROP POLICY IF EXISTS "View whatsapp_messages" ON public.whatsapp_messages;
 CREATE POLICY "View whatsapp_messages"
 ON public.whatsapp_messages FOR SELECT TO authenticated
 USING (
@@ -25,6 +26,7 @@ USING (
 );
 
 -- Política: Solo el sistema puede insertar
+DROP POLICY IF EXISTS "Insert whatsapp_messages system only" ON public.whatsapp_messages;
 CREATE POLICY "Insert whatsapp_messages system only"
 ON public.whatsapp_messages FOR INSERT TO authenticated
 WITH CHECK (false);
