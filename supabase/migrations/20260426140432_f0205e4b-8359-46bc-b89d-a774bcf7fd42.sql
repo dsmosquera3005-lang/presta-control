@@ -83,7 +83,6 @@ CREATE TABLE public.loans (
   payment_date DATE NOT NULL,
   status loan_status NOT NULL DEFAULT 'activo',
   notes TEXT,
-  created_at timestamp,
   created_by UUID NOT NULL REFERENCES auth.users(id),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
