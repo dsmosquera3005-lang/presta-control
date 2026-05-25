@@ -1,0 +1,3 @@
+-- Create admin user dantiny3005@gmail.com
+-- Será creado manualmente via API Supabase Auth
+-- Esta migración se puede eliminar

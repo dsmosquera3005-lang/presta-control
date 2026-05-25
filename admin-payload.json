@@ -1,0 +1,9 @@
+{
+  "email": "dantiny3005@gmail.com",
+  "password": "D@nte3005",
+  "email_confirm": true,
+  "user_metadata": {
+    "full_name": "Administrador",
+    "role": "admin"
+  }
+}
