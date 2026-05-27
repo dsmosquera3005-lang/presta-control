@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Send } from "lucide-react";
 import { createChangeRequest, REQUEST_LABELS, type ChangeRequestType } from "@/lib/changeRequests";
 import { supabase } from "@/integrations/supabase/client";
+import { localIsoDate } from "@/lib/utils";
 
 interface Props {
   trigger?: React.ReactNode;
@@ -62,7 +63,7 @@ export function NoveltyDialog({ trigger, defaultType, clientId, loanId, paymentI
   const loadAux = async (t: ChangeRequestType = type) => {
     if (!clientId) return;
     if (t === "delete_payment") {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = localIsoDate();
       const { data } = await supabase
         .from("payments")
         .select("id, amount, payment_type, payment_date, notes")
@@ -147,7 +148,7 @@ export function NoveltyDialog({ trigger, defaultType, clientId, loanId, paymentI
         // Buscamos el loan_id y la payment_date actual del crédito para poder revertir
         const { data: pay } = await supabase
   .from("payments")
-  .select("loan_id")
+    .select("loan_id, advisor_id, client_id")
   .eq("id", p.id)
   .maybeSingle();
 
@@ -176,6 +177,8 @@ payload = {
   previous_loan_payment_date: prevDate,
   renewed_from: renewedFrom,
   current_loan_id: currentLoanId,
+    advisor_id: pay?.advisor_id,
+    client_id: pay?.client_id,
 };
       }
     }

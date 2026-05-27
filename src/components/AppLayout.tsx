@@ -1,5 +1,5 @@
 import { Link, useRouter, useLocation } from "@tanstack/react-router";
-import { LayoutDashboard, Users, Banknote, UserCog, LogOut, Wallet, Coins, Inbox, MessageCircle, BarChart3 } from "lucide-react";
+import { LayoutDashboard, Users, Banknote, UserCog, LogOut, Wallet, Coins, Inbox, MessageCircle, BarChart3, Activity } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useChatNotifications } from "@/hooks/useChatNotifications";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ const navItems = [
   { to: "/reports", label: "Informe mensual", icon: BarChart3, adminOnly: false },
   { to: "/chat", label: "Chat", icon: MessageCircle, adminOnly: false },
   { to: "/admin/novelties", label: "Novedades", icon: Inbox, adminOnly: true },
+  { to: "/admin/daily-movements", label: "Movimientos del día", icon: Activity, adminOnly: false },
   { to: "/admin/users", label: "Usuarios", icon: UserCog, adminOnly: true },
 ] as const;
 

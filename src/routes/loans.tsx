@@ -20,7 +20,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn, localIsoDate } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { calcMora, totalDue } from "@/lib/mora";
@@ -74,7 +74,7 @@ type FilterKey =
   | "np"
   | "acuerdos";
 
-const todayStr = () => new Date().toISOString().slice(0, 10);
+const todayStr = () => localIsoDate();
 const fmt = (n: number) =>
   new Intl.NumberFormat("es", { style: "currency", currency: "USD" }).format(n);
 

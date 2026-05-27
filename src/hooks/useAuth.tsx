@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { localIsoDate } from "@/lib/utils";
 
 export type AppRole = "admin" | "asesor";
 
@@ -39,7 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let active = prof?.is_active ?? true;
     const blockedUntil = (prof as any)?.blocked_until as string | null | undefined;
     if (!active && blockedUntil) {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = localIsoDate();
       if (blockedUntil <= today) {
         // Desbloqueo automático
         await supabase

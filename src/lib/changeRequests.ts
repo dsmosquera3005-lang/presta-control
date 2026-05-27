@@ -90,6 +90,13 @@ export async function applyChangeRequest(reqId: string): Promise<void> {
           .update({ payment_date: payload.previous_loan_payment_date })
           .eq("id", req.loan_id);
       }
+      // Si era un pago de "total", devolver el crédito a estado activo
+      if (req.loan_id && payload.payment_type === "total") {
+        await supabase
+          .from("loans")
+          .update({ status: "activo" })
+          .eq("id", req.loan_id);
+      }
       // Si era un pago de "interes" (renovación), eliminar el crédito renovado
       // y reactivar el anterior para que desaparezca de Renovados.
       if (req.loan_id && payload.payment_type === "interes") {
@@ -101,6 +108,13 @@ export async function applyChangeRequest(reqId: string): Promise<void> {
           await supabase.from("loans").delete().eq("id", (r as any).id);
         }
         await supabase.from("loans").update({ status: "activo" }).eq("id", req.loan_id);
+      }
+      // Si era un pago de "total", activar el cliente al asesor que lo manejaba
+      if (payload.payment_type === "total" && payload.advisor_id && payload.client_id) {
+        await supabase
+          .from("clients")
+          .update({ status: "activo", created_by: payload.advisor_id })
+          .eq("id", payload.client_id);
       }
       const { error: e } = await supabase.from("payments").delete().eq("id", req.payment_id);
       if (e) throw e;

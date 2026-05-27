@@ -17,10 +17,12 @@ import { Route as ClientsRouteImport } from './routes/clients'
 import { Route as ChatRouteImport } from './routes/chat'
 import { Route as CashRouteImport } from './routes/cash'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ReceiptIdRouteImport } from './routes/receipt.$id'
 import { Route as ClientsNewRouteImport } from './routes/clients.new'
 import { Route as ClientsIdRouteImport } from './routes/clients.$id'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
 import { Route as AdminNoveltiesRouteImport } from './routes/admin.novelties'
+import { Route as AdminDailyMovementsRouteImport } from './routes/admin.daily-movements'
 
 const ReportsRoute = ReportsRouteImport.update({
   id: '/reports',
@@ -62,6 +64,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ReceiptIdRoute = ReceiptIdRouteImport.update({
+  id: '/receipt/$id',
+  path: '/receipt/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ClientsNewRoute = ClientsNewRouteImport.update({
   id: '/new',
   path: '/new',
@@ -82,6 +89,11 @@ const AdminNoveltiesRoute = AdminNoveltiesRouteImport.update({
   path: '/admin/novelties',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminDailyMovementsRoute = AdminDailyMovementsRouteImport.update({
+  id: '/admin/daily-movements',
+  path: '/admin/daily-movements',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -92,10 +104,12 @@ export interface FileRoutesByFullPath {
   '/loans': typeof LoansRoute
   '/login': typeof LoginRoute
   '/reports': typeof ReportsRoute
+  '/admin/daily-movements': typeof AdminDailyMovementsRoute
   '/admin/novelties': typeof AdminNoveltiesRoute
   '/admin/users': typeof AdminUsersRoute
   '/clients/$id': typeof ClientsIdRoute
   '/clients/new': typeof ClientsNewRoute
+  '/receipt/$id': typeof ReceiptIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -106,10 +120,12 @@ export interface FileRoutesByTo {
   '/loans': typeof LoansRoute
   '/login': typeof LoginRoute
   '/reports': typeof ReportsRoute
+  '/admin/daily-movements': typeof AdminDailyMovementsRoute
   '/admin/novelties': typeof AdminNoveltiesRoute
   '/admin/users': typeof AdminUsersRoute
   '/clients/$id': typeof ClientsIdRoute
   '/clients/new': typeof ClientsNewRoute
+  '/receipt/$id': typeof ReceiptIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -121,10 +137,12 @@ export interface FileRoutesById {
   '/loans': typeof LoansRoute
   '/login': typeof LoginRoute
   '/reports': typeof ReportsRoute
+  '/admin/daily-movements': typeof AdminDailyMovementsRoute
   '/admin/novelties': typeof AdminNoveltiesRoute
   '/admin/users': typeof AdminUsersRoute
   '/clients/$id': typeof ClientsIdRoute
   '/clients/new': typeof ClientsNewRoute
+  '/receipt/$id': typeof ReceiptIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -137,10 +155,12 @@ export interface FileRouteTypes {
     | '/loans'
     | '/login'
     | '/reports'
+    | '/admin/daily-movements'
     | '/admin/novelties'
     | '/admin/users'
     | '/clients/$id'
     | '/clients/new'
+    | '/receipt/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -151,10 +171,12 @@ export interface FileRouteTypes {
     | '/loans'
     | '/login'
     | '/reports'
+    | '/admin/daily-movements'
     | '/admin/novelties'
     | '/admin/users'
     | '/clients/$id'
     | '/clients/new'
+    | '/receipt/$id'
   id:
     | '__root__'
     | '/'
@@ -165,10 +187,12 @@ export interface FileRouteTypes {
     | '/loans'
     | '/login'
     | '/reports'
+    | '/admin/daily-movements'
     | '/admin/novelties'
     | '/admin/users'
     | '/clients/$id'
     | '/clients/new'
+    | '/receipt/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -180,8 +204,10 @@ export interface RootRouteChildren {
   LoansRoute: typeof LoansRoute
   LoginRoute: typeof LoginRoute
   ReportsRoute: typeof ReportsRoute
+  AdminDailyMovementsRoute: typeof AdminDailyMovementsRoute
   AdminNoveltiesRoute: typeof AdminNoveltiesRoute
   AdminUsersRoute: typeof AdminUsersRoute
+  ReceiptIdRoute: typeof ReceiptIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -242,6 +268,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/receipt/$id': {
+      id: '/receipt/$id'
+      path: '/receipt/$id'
+      fullPath: '/receipt/$id'
+      preLoaderRoute: typeof ReceiptIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/clients/new': {
       id: '/clients/new'
       path: '/new'
@@ -270,6 +303,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminNoveltiesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/daily-movements': {
+      id: '/admin/daily-movements'
+      path: '/admin/daily-movements'
+      fullPath: '/admin/daily-movements'
+      preLoaderRoute: typeof AdminDailyMovementsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -295,8 +335,10 @@ const rootRouteChildren: RootRouteChildren = {
   LoansRoute: LoansRoute,
   LoginRoute: LoginRoute,
   ReportsRoute: ReportsRoute,
+  AdminDailyMovementsRoute: AdminDailyMovementsRoute,
   AdminNoveltiesRoute: AdminNoveltiesRoute,
   AdminUsersRoute: AdminUsersRoute,
+  ReceiptIdRoute: ReceiptIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

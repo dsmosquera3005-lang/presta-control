@@ -5,6 +5,7 @@ import { AppLayout } from "@/components/AppLayout";
 import { Card } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { localIsoDate } from "@/lib/utils";
 import {
   Select,
   SelectContent,
@@ -43,7 +44,7 @@ function prevPeriod(p: { start: Date }): { start: Date; end: Date; label: string
 }
 
 function isoDate(d: Date) {
-  return d.toISOString().slice(0, 10);
+  return localIsoDate(d);
 }
 
 interface PeriodStats {

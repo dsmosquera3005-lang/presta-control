@@ -11,12 +11,15 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { sendWhatsAppReceipt } from "@/lib/whatsappApi";
+import { buildWhatsAppMessage } from "@/lib/whatsappHelpers";
 import { ClientEditForm } from "@/components/ClientEditForm";
 import { calcMora, totalDue } from "@/lib/mora";
-import { cn } from "@/lib/utils";
+import { cn, localIsoDate } from "@/lib/utils";
 import { NoveltyDialog } from "@/components/NoveltyDialog";
 
 export const Route = createFileRoute("/clients/$id")({
@@ -338,11 +341,17 @@ function NewLoanForm({
 }) {
   const [amount, setAmount] = useState("");
   const [expected, setExpected] = useState("");
-  const today = new Date().toISOString().slice(0, 10);
+  const localDate = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+  const today = localDate(new Date());
   const maxDate = (() => {
     const d = new Date();
     d.setDate(d.getDate() + 20);
-    return d.toISOString().slice(0, 10);
+    return localDate(d);
   })();
   const [date, setDate] = useState(maxDate);
   const [notes, setNotes] = useState("");
@@ -487,16 +496,60 @@ function LoanRow({
   const mora = calcMora(loan);
   const totalACobrar = totalDue(Number(loan.expected_amount), mora.fee);
 
+  const { session } = useAuth();
+  const sendWhatsAppReceiptFn = useServerFn(sendWhatsAppReceipt);
+
+  const sendReceiptMessage = async (paymentId: string, blankWindow?: Window | null) => {
+    if (!session?.access_token) {
+      if (blankWindow) blankWindow.close();
+      return { success: false, error: 'No se encontró la sesión de usuario.' };
+    }
+
+    try {
+      const result = await sendWhatsAppReceiptFn({
+        data: { paymentId },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (!result || !result.phoneNumber) {
+        if (blankWindow) blankWindow.close();
+        return { success: false, error: 'No se pudo generar el enlace de WhatsApp.' };
+      }
+
+      const receiptUrl = result.receiptUrl ?? `${window.location.origin}${result.receiptPath}`;
+      const message = buildWhatsAppMessage(result.payment, { full_name: result.clientFullName }, receiptUrl);
+      const whatsappUrl = `https://wa.me/${result.phoneNumber}?text=${encodeURIComponent(message)}`;
+
+      if (blankWindow) {
+        blankWindow.location.href = whatsappUrl;
+      } else {
+        window.location.href = whatsappUrl;
+      }
+
+      return { success: true };
+    } catch (error: unknown) {
+      if (blankWindow) blankWindow.close();
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Error enviando el comprobante WhatsApp.',
+      };
+    }
+  };
+
   // Solo el asesor que prestó (o admin) puede cobrar / renovar / poner en aviso o sacado.
   const canActOnLoan = isAdmin || loan.created_by === currentUserId;
 
   const confirmPayTotal = async () => {
+    const blankWindow = window.open('', '_blank');
     setPaying(true);
     const { error: loanErr } = await supabase
       .from("loans")
       .update({ status: "pagado" })
       .eq("id", loan.id);
     if (loanErr) {
+      blankWindow?.close();
       setPaying(false);
       return toast.error(loanErr.message);
     }
@@ -504,18 +557,40 @@ function LoanRow({
       .from("clients")
       .update({ status: nextStatus })
       .eq("id", clientId);
+
     if (!clientErr) {
-      await supabase.from("payments").insert({
-        loan_id: loan.id,
-        client_id: clientId,
-        advisor_id: currentUserId,
-        payment_type: "total",
-        amount: totalACobrar,
-        notes: mora.fee > 0 ? `Incluye mora ${mora.percent}% (${mora.fee})` : null,
-      });
+      const { data: paymentData, error: paymentErr } = await supabase
+        .from("payments")
+        .insert({
+          loan_id: loan.id,
+          client_id: clientId,
+          advisor_id: currentUserId,
+          payment_type: "total",
+          amount: totalACobrar,
+          notes: mora.fee > 0 ? `Incluye mora ${mora.percent}% (${mora.fee})` : null,
+        })
+        .select("id")
+        .maybeSingle();
+
+      if (paymentErr) {
+        blankWindow?.close();
+        setPaying(false);
+        return toast.error(paymentErr.message);
+      }
+
+      if (paymentData?.id) {
+        const result = await sendReceiptMessage(paymentData.id, blankWindow);
+        if (!result.success) {
+          toast.error(`Pago registrado, pero no se pudo enviar el comprobante WhatsApp. ${result.error ?? ""}`);
+        }
+      }
     }
+
     setPaying(false);
-    if (clientErr) return toast.error(clientErr.message);
+    if (clientErr) {
+      blankWindow?.close();
+      return toast.error(clientErr.message);
+    }
     toast.success("Pago total registrado");
     setPayOpen(false);
     onChanged();
@@ -915,18 +990,19 @@ function RenewLoanForm({
   const [interest, setInterest] = useState<string>("");
   const moraInfo = calcMora(loan);
   const moraFee = moraInfo.fee;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localIsoDate();
   const maxDate = (() => {
     const d = new Date();
     d.setDate(d.getDate() + 20);
-    return d.toISOString().slice(0, 10);
+    return localIsoDate(d);
   })();
   const [nextDate, setNextDate] = useState<string>(maxDate);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
+  const { session } = useAuth();
+  const sendWhatsAppReceiptFn = useServerFn(sendWhatsAppReceipt);
 
   
-
   useEffect(() => {
     void (async () => {
       const { data } = await supabase
@@ -1009,13 +1085,61 @@ function RenewLoanForm({
   }
 
   // 4) Registrar el pago del interés en la tabla de pagos
-  await supabase.from("payments").insert({
-    loan_id: loan.id,
-    client_id: clientId,
-    advisor_id: userId,
-    payment_type: "interes",
-    amount: interestNum,
-  });
+  const { data: paymentData, error: paymentErr } = await supabase
+    .from("payments")
+    .insert({
+      loan_id: loan.id,
+      client_id: clientId,
+      advisor_id: userId,
+      payment_type: "interes",
+      amount: interestNum,
+    })
+    .select("id")
+    .maybeSingle();
+
+  if (paymentErr) {
+    setSaving(false);
+    return toast.error(paymentErr.message);
+  }
+
+  if (paymentData?.id) {
+    const blankWindow = window.open('', '_blank');
+
+    if (!session?.access_token) {
+      blankWindow?.close();
+      toast.error('No se encontró la sesión de usuario para enviar el comprobante.');
+    } else {
+      try {
+        const result = await sendWhatsAppReceiptFn({
+          data: { paymentId: paymentData.id },
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        });
+
+        if (!result || !result.phoneNumber) {
+          blankWindow?.close();
+          toast.error('Pago registrado, pero no se pudo generar el enlace de WhatsApp.');
+        } else {
+          const receiptUrl = result.receiptUrl ?? `${window.location.origin}${result.receiptPath}`;
+          const message = buildWhatsAppMessage(result.payment, { full_name: result.clientFullName }, receiptUrl);
+          const whatsappUrl = `https://wa.me/${result.phoneNumber}?text=${encodeURIComponent(message)}`;
+          if (blankWindow) {
+            blankWindow.location.href = whatsappUrl;
+          } else {
+            window.location.href = whatsappUrl;
+          }
+        }
+      } catch (error: unknown) {
+        blankWindow?.close();
+        toast.error(
+          `Pago registrado, pero no se pudo enviar el comprobante WhatsApp. ${
+            error instanceof Error ? error.message : ''
+          }`,
+        );
+      }
+    }
+  }
 
   setSaving(false);
   toast.success("Crédito renovado");

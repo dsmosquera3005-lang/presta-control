@@ -1,6 +1,7 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { UserPlus, ShieldCheck, User as UserIcon, Percent, Lock } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
+import { useEffect, useMemo, useState } from "react";
+import { UserPlus, ShieldCheck, User as UserIcon, Percent, Lock, Edit3, Trash2 } from "lucide-react";
 import { z } from "zod";
 import { AppLayout } from "@/components/AppLayout";
 import { Card } from "@/components/ui/card";
@@ -17,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -27,6 +29,8 @@ import {
 } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { localIsoDate } from "@/lib/utils";
+import { createAdminUser } from "@/lib/userApi";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/admin/users")({
@@ -42,12 +46,15 @@ interface UserItem {
 }
 
 function AdminUsersPage() {
-  const { role, loading } = useAuth();
+  const { role, loading, user } = useAuth();
   const router = useRouter();
   const [users, setUsers] = useState<UserItem[]>([]);
   const [open, setOpen] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [blockTarget, setBlockTarget] = useState<UserItem | null>(null);
+  const [editTarget, setEditTarget] = useState<UserItem | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<UserItem | null>(null);
+  const [reassignTarget, setReassignTarget] = useState<UserItem | null>(null);
 
   useEffect(() => {
     if (!loading && role !== "admin") {
@@ -79,6 +86,34 @@ function AdminUsersPage() {
     void load();
   };
 
+  const saveUser = async (id: string, full_name: string, email: string, roleValue: "admin" | "asesor") => {
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .update({ full_name, email })
+      .eq("id", id);
+    if (profileError) return toast.error(profileError.message);
+
+    await supabase.from("user_roles").delete().eq("user_id", id);
+    const { error: roleError } = await supabase
+      .from("user_roles")
+      .insert({ user_id: id, role: roleValue });
+    if (roleError) return toast.error(roleError.message);
+
+    toast.success("Usuario actualizado");
+    void load();
+  };
+
+  const deleteUser = async (id: string) => {
+    const { error: roleError } = await supabase.from("user_roles").delete().eq("user_id", id);
+    if (roleError) return toast.error(roleError.message);
+
+    const { error: profileError } = await supabase.from("profiles").delete().eq("id", id);
+    if (profileError) return toast.error(profileError.message);
+
+    toast.success("Usuario eliminado");
+    void load();
+  };
+
   const toggleActive = async (userId: string, next: boolean) => {
     // Si se va a BLOQUEAR (next=false), pedir primero la base del día siguiente
     if (!next) {
@@ -95,7 +130,7 @@ function AdminUsersPage() {
     );
     const { error } = await supabase
       .from("profiles")
-      .update({ is_active: next, blocked_until: next ? null : new Date(Date.now() + 86400000).toISOString().slice(0, 10) })
+      .update({ is_active: next, blocked_until: next ? null : localIsoDate(new Date(Date.now() + 86400000)) })
       .eq("id", userId);
     if (error) {
       // Revertir si falla
@@ -179,7 +214,7 @@ function AdminUsersPage() {
                   </span>
                 </div>
               )}
-              <Select value={u.role ?? "asesor"} onValueChange={(v) => changeRole(u.id, v as "admin" | "asesor")}>
+              <Select value={u.role ?? "asesor"} onValueChange={(v) => changeRole(u.id, v as "admin" | "asesor")}> 
                 <SelectTrigger className="w-32">
                   <SelectValue />
                 </SelectTrigger>
@@ -188,6 +223,30 @@ function AdminUsersPage() {
                   <SelectItem value="admin">Admin</SelectItem>
                 </SelectContent>
               </Select>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setReassignTarget(u)}
+                >
+                  {"Reasignar clientes"}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setEditTarget(u)}
+                >
+                  <Edit3 className="mr-2 h-4 w-4" />Editar
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setDeleteTarget(u)}
+                  disabled={u.id === user?.id}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />Eliminar
+                </Button>
+              </div>
             </div>
           </Card>
         ))}
@@ -198,6 +257,32 @@ function AdminUsersPage() {
         onBlocked={() => {
           setBlockTarget(null);
           void load();
+        }}
+      />
+      <ReassignClientsDialog
+        target={reassignTarget}
+        users={users}
+        onClose={() => setReassignTarget(null)}
+        onReassigned={() => {
+          setReassignTarget(null);
+          void load();
+        }}
+      />
+      <EditUserDialog
+        target={editTarget}
+        onClose={() => setEditTarget(null)}
+        onSaved={() => {
+          setEditTarget(null);
+          void load();
+        }}
+        onSave={saveUser}
+      />
+      <DeleteUserDialog
+        target={deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onDelete={async (id) => {
+          await deleteUser(id);
+          setDeleteTarget(null);
         }}
       />
     </AppLayout>
@@ -262,6 +347,12 @@ const newUserSchema = z.object({
   role: z.enum(["asesor", "admin"]),
 });
 
+const editUserSchema = z.object({
+  full_name: z.string().trim().min(2).max(120),
+  email: z.string().trim().email().max(255),
+  role: z.enum(["asesor", "admin"]),
+});
+
 function CreateUserForm({ onCreated }: { onCreated: () => void }) {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -269,24 +360,24 @@ function CreateUserForm({ onCreated }: { onCreated: () => void }) {
   const [role, setRole] = useState<"asesor" | "admin">("asesor");
   const [saving, setSaving] = useState(false);
 
+  const createUserFn = useServerFn(createAdminUser);
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     const parsed = newUserSchema.safeParse({ full_name: fullName, email, password, role });
     if (!parsed.success) return toast.error(parsed.error.issues[0].message);
     setSaving(true);
-    // Crear usuario con metadata de rol; el trigger handle_new_user lo aplica
-    const { error } = await supabase.auth.signUp({
-      email: parsed.data.email,
-      password: parsed.data.password,
-      options: {
-        data: { full_name: parsed.data.full_name, role: parsed.data.role },
-        emailRedirectTo: `${window.location.origin}/dashboard`,
-      },
-    });
-    setSaving(false);
-    if (error) return toast.error(error.message);
-    toast.success("Usuario creado");
-    onCreated();
+
+    try {
+      await createUserFn({ data: parsed.data });
+      toast.success("Usuario creado");
+      onCreated();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Error al crear el usuario.";
+      toast.error(message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -325,9 +416,337 @@ function CreateUserForm({ onCreated }: { onCreated: () => void }) {
   );
 }
 
-// Calcula la "Entrega Final" del día actual de un asesor
-// (misma lógica que /cash) y la deja como base del día siguiente
-// antes de bloquear al usuario.
+function EditUserDialog({
+  target,
+  onClose,
+  onSaved,
+  onSave,
+}: {
+  target: UserItem | null;
+  onClose: () => void;
+  onSaved: () => void;
+  onSave: (id: string, full_name: string, email: string, role: "admin" | "asesor") => Promise<void>;
+}) {
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState<"admin" | "asesor">("asesor");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!target) return;
+    setFullName(target.full_name);
+    setEmail(target.email);
+    setRole(target.role ?? "asesor");
+  }, [target]);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!target) return;
+    const parsed = editUserSchema.safeParse({ full_name: fullName, email, role });
+    if (!parsed.success) return toast.error(parsed.error.issues[0].message);
+    setSaving(true);
+    await onSave(target.id, parsed.data.full_name, parsed.data.email, parsed.data.role);
+    setSaving(false);
+    onSaved();
+  };
+
+  return (
+    <Dialog open={!!target} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Editar usuario</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={submit} className="space-y-4">
+          <div className="space-y-1.5">
+            <Label>Nombre completo</Label>
+            <Input value={fullName} onChange={(e) => setFullName(e.target.value)} required />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Email</Label>
+            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Rol</Label>
+            <Select value={role} onValueChange={(v) => setRole(v as "admin" | "asesor")}> 
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="asesor">Asesor</SelectItem>
+                <SelectItem value="admin">Administrador</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={onClose} disabled={saving}>Cancelar</Button>
+            <Button type="submit" disabled={saving}>
+              {saving ? "Guardando..." : "Guardar cambios"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DeleteUserDialog({
+  target,
+  onClose,
+  onDelete,
+}: {
+  target: UserItem | null;
+  onClose: () => void;
+  onDelete: (id: string) => Promise<void>;
+}) {
+  const [saving, setSaving] = useState(false);
+
+  const confirm = async () => {
+    if (!target) return;
+    setSaving(true);
+    await onDelete(target.id);
+    setSaving(false);
+  };
+
+  return (
+    <Dialog open={!!target} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Eliminar usuario</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          Esta acción eliminará al usuario <strong>{target?.full_name}</strong> y su rol asociado. Esta operación no puede deshacerse.
+        </p>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving}>Cancelar</Button>
+          <Button variant="destructive" onClick={confirm} disabled={saving}>
+            {saving ? "Eliminando..." : "Eliminar usuario"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+interface ClientItem {
+  id: string;
+  cedula: string;
+  full_name: string;
+  phone: string | null;
+  status: string | null;
+  created_at: string;
+}
+
+function ReassignClientsDialog({
+  target,
+  users,
+  onClose,
+  onReassigned,
+}: {
+  target: UserItem | null;
+  users: UserItem[];
+  onClose: () => void;
+  onReassigned: () => void;
+}) {
+  const [clients, setClients] = useState<ClientItem[]>([]);
+  const [search, setSearch] = useState("");
+  const [selectedClientIds, setSelectedClientIds] = useState<Set<string>>(new Set());
+  const [targetAdvisorId, setTargetAdvisorId] = useState<string>("");
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const advisors = useMemo(
+    () => users.filter((u) => u.role === "asesor" && u.id !== target?.id),
+    [users, target?.id],
+  );
+
+  useEffect(() => {
+    if (!target) {
+      setSearch("");
+      setClients([]);
+      setSelectedClientIds(new Set());
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setSearch("");
+    setSelectedClientIds(new Set());
+
+    (async () => {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("id, cedula, full_name, phone, status, created_at")
+        .eq("created_by", target.id)
+        .order("full_name", { ascending: true });
+
+      if (error) {
+        toast.error(error.message);
+        setClients([]);
+      } else {
+        setClients(data ?? []);
+      }
+      setLoading(false);
+    })();
+  }, [target?.id]);
+
+  useEffect(() => {
+    if (!targetAdvisorId && advisors.length > 0) {
+      setTargetAdvisorId(advisors[0].id);
+    }
+  }, [advisors, targetAdvisorId]);
+
+  const filteredClients = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return clients;
+    return clients.filter(
+      (client) =>
+        client.full_name.toLowerCase().includes(term) ||
+        client.cedula.toLowerCase().includes(term),
+    );
+  }, [clients, search]);
+
+  const allVisibleSelected =
+    filteredClients.length > 0 &&
+    filteredClients.every((client) => selectedClientIds.has(client.id));
+
+  const toggleClient = (id: string) => {
+    setSelectedClientIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    setSelectedClientIds((prev) => {
+      const next = new Set(prev);
+      if (allVisibleSelected) {
+        filteredClients.forEach((client) => next.delete(client.id));
+      } else {
+        filteredClients.forEach((client) => next.add(client.id));
+      }
+      return next;
+    });
+  };
+
+  const handleConfirm = async () => {
+    if (!target) return;
+    if (!targetAdvisorId) {
+      return toast.error("Selecciona un asesor destino.");
+    }
+    if (selectedClientIds.size === 0) {
+      return toast.error("Selecciona al menos un cliente.");
+    }
+    setSaving(true);
+    const { error } = await supabase
+      .from("clients")
+      .update({ created_by: targetAdvisorId })
+      .in("id", Array.from(selectedClientIds));
+    setSaving(false);
+
+    if (error) {
+      return toast.error(error.message);
+    }
+
+    toast.success("Clientes reasignados correctamente.");
+    onReassigned();
+    onClose();
+  };
+
+  return (
+    <Dialog open={!!target} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>Reasignar clientes de {target?.full_name}</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-4">
+          <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+            <Input
+              placeholder="Buscar por nombre o cédula..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full"
+            />
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Mover a:</span>
+              <Select value={targetAdvisorId} onValueChange={(v) => setTargetAdvisorId(v as string)}>
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Selecciona asesor" />
+                </SelectTrigger>
+                <SelectContent>
+                  {advisors.map((advisor) => (
+                    <SelectItem key={advisor.id} value={advisor.id}>
+                      {advisor.full_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-3">
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Checkbox checked={allVisibleSelected} onCheckedChange={toggleSelectAll} />
+              Seleccionar todos ({filteredClients.length})
+            </label>
+            <span className="text-sm text-muted-foreground">
+              {selectedClientIds.size} cliente(s) seleccionado(s)
+            </span>
+          </div>
+
+          <div className="max-h-[320px] overflow-y-auto rounded-xl border border-border bg-background p-2">
+            {loading ? (
+              <div className="py-12 text-center text-muted-foreground">Cargando clientes...</div>
+            ) : filteredClients.length === 0 ? (
+              <div className="py-12 text-center text-muted-foreground">
+                {clients.length === 0
+                  ? "No hay clientes asignados a este usuario."
+                  : "No se encontraron clientes con ese término de búsqueda."}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {filteredClients.map((client) => (
+                  <label
+                    key={client.id}
+                    className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border px-3 py-3 transition hover:border-primary/40"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Checkbox
+                        checked={selectedClientIds.has(client.id)}
+                        onCheckedChange={() => toggleClient(client.id)}
+                      />
+                      <div className="min-w-0">
+                        <div className="font-medium truncate">{client.full_name}</div>
+                        <div className="text-xs text-muted-foreground truncate">
+                          {client.cedula} · {client.phone ?? "Sin teléfono"}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-right text-xs text-muted-foreground">
+                      {new Date(client.created_at).toLocaleDateString("es")}
+                    </div>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving}>
+            Cancelar
+          </Button>
+          <Button onClick={handleConfirm} disabled={saving || targetAdvisorId === "" || selectedClientIds.size === 0}>
+            {saving ? "Reasignando..." : "Reasignar clientes"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function BlockUserDialog({
   target,
   onClose,
@@ -339,26 +758,27 @@ function BlockUserDialog({
 }) {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [computed, setComputed] = useState<number>(0);
-  const [base, setBase] = useState<string>("0");
-  const [notes, setNotes] = useState<string>("");
-  const today = new Date().toISOString().slice(0, 10);
-  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const [base, setBase] = useState("0");
+  const [notes, setNotes] = useState("");
+  const [computed, setComputed] = useState(0);
+
+  const today = localIsoDate();
+  const tomorrow = localIsoDate(new Date(Date.now() + 86400000));
 
   useEffect(() => {
-    if (!target) return;
-    void (async () => {
-      setLoading(true);
+    if (!target) {
+      setLoading(false);
+      setBase("0");
+      setNotes("");
+      setComputed(0);
+      return;
+    }
+    setLoading(true);
+
+    (async () => {
       try {
-        // Pagos del día
         const { data: pays } = await supabase
           .from("payments")
-          .select("id, loan_id, payment_type, amount")
-          .eq("payment_date", today)
-          .eq("advisor_id", target.id);
-        // Préstamos creados hoy
-        const { data: ls } = await supabase
-          .from("loans")
           .select("id, amount, renewed_from")
           .eq("loan_date", today)
           .eq("created_by", target.id);

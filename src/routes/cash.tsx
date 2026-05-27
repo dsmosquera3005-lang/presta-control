@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { localIsoDate } from "@/lib/utils";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/cash")({
@@ -92,7 +93,7 @@ const isAdditionalPayment = (p: Pick<PaymentRow, "payment_type" | "notes">) =>
 
 function CashPage() {
   const { user, role, loading } = useAuth();
-  const [date, setDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState<string>(() => localIsoDate());
   const [advisors, setAdvisors] = useState<Advisor[]>([]);
   const [selectedAdvisor, setSelectedAdvisor] = useState<string>("");
   const [advisorName, setAdvisorName] = useState<string>("");
@@ -842,7 +843,7 @@ function AdminLoanActions({
 const previousDate = new Date(loan.loan_date);
 previousDate.setDate(previousDate.getDate() - 1);
 
-const formattedDate = previousDate.toISOString().slice(0, 10);
+const formattedDate = localIsoDate(previousDate);
 
 const { error } = await supabase
   .from("loans")

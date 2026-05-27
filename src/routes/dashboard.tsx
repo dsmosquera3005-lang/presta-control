@@ -14,6 +14,7 @@ import {
 } from "recharts";
 import { AppLayout } from "@/components/AppLayout";
 import { Card } from "@/components/ui/card";
+import { localIsoDate } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
@@ -58,7 +59,7 @@ function DashboardPage() {
       .from("loans")
       .select("id, expected_amount, payment_date, clients(full_name, cedula)")
       .eq("status", "activo")
-      .gte("payment_date", new Date().toISOString().slice(0, 10))
+      .gte("payment_date", localIsoDate())
       .order("payment_date", { ascending: true })
       .limit(5);
     let paymentsQ = supabase
@@ -92,8 +93,8 @@ function DashboardPage() {
         0
       );
     // Interés cobrado este mes (pagos tipo "interes")
-    const monthStartIso = monthStart.toISOString().slice(0, 10);
-    const monthEndIso = monthEnd.toISOString().slice(0, 10);
+    const monthStartIso = localIsoDate(monthStart);
+    const monthEndIso = localIsoDate(monthEnd);
     const collectedInterest = (payments ?? [])
       .filter(
         (p) =>
