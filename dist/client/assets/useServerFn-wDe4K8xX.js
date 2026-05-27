@@ -1,0 +1,1 @@
+import{x as a,o as i,l as e}from"./index-BLZ3SkPV.js";function c(o){const r=a();return i.useCallback(async(...s)=>{try{const t=await o(...s);if(e(t))throw t;return t}catch(t){if(e(t))return t.options._fromLocation=r.stores.location.get(),r.navigate(r.resolveRedirect(t).options);throw t}},[r,o])}export{c as u};
